@@ -40,6 +40,9 @@ public class SetImpl implements Set {
             }
             if (!window.next.next.isMarked()) {
                 return window;
+            } else {
+                AtomicMarkableReference<Node> s = window.next.next;
+                window.cur.next.compareAndSet(window.next, s.getReference(), true, s.isMarked());
             }
         }
     }
