@@ -1,66 +1,81 @@
 package linked_list_set;
 
-public class SetImpl implements Set {
-    private class Node {
-        Node next;
-        int x;
+import java.util.concurrent.atomic.AtomicMarkableReference;
 
-        Node(int x, Node next) {
-            this.next = next;
+public class SetImpl implements Set {
+
+    private static class Node {
+        private AtomicMarkableReference<Node> next;
+        private int x;
+
+        private Node(int x, Node next, boolean removed) {
+            this.next = new AtomicMarkableReference<>(next, removed);
             this.x = x;
         }
     }
 
-    private class Window {
-        Node cur, next;
+    private static class Window {
+        Node cur;
+        Node next;
     }
 
-    private final Node head = new Node(Integer.MIN_VALUE, new Node(Integer.MAX_VALUE, null));
+    private final Node head = new Node(Integer.MIN_VALUE, new Node(Integer.MAX_VALUE, null, false), false);
 
-    /**
-     * Returns the {@link Window}, where cur.x < x <= next.x
-     */
-    private Window findWindow(int x) {
-        Window w = new Window();
-        w.cur = head;
-        w.next = w.cur.next;
-        while (w.next.x < x) {
-            w.cur = w.next;
-            w.next = w.cur.next;
+    private Window findWindows(int x) {
+        while (true) {
+            Window window = new Window();
+            window.cur = head;
+            window.next = window.cur.next.getReference();
+            while (window.next.x < x) {
+                AtomicMarkableReference<Node> s = window.next.next;
+                if (s.isMarked()) {
+                    if (!window.cur.next.compareAndSet(window.next, s.getReference(), false, false)) {
+                        continue;
+                    }
+                    window.next = s.getReference();
+                } else {
+                    window.cur = window.next;
+                    window.next = window.cur.next.getReference();
+                }
+                if (!window.next.next.isMarked()) {
+                    return window;
+                }
+            }
         }
-        return w;
     }
 
     @Override
     public boolean add(int x) {
-        Window w = findWindow(x);
-        boolean res;
-        if (w.next.x == x) {
-            res = false;
-        } else {
-            w.cur.next = new Node(x, w.next);
-            res = true;
+        while (true) {
+            Window window = findWindows(x);
+            if (window.next.x == x) {
+                return false;
+            }
+            Node node = new Node(x, window.next, false);
+            if (window.cur.next.compareAndSet(window.next, node, false, false)) {
+                return true;
+            }
         }
-        return res;
     }
 
     @Override
     public boolean remove(int x) {
-        Window w = findWindow(x);
-        boolean res;
-        if (w.next.x != x) {
-            res = false;
-        } else {
-            w.cur.next = w.next.next;
-            res = true;
+        while (true) {
+            Window window = findWindows(x);
+            if (window.next.x != x) {
+                return false;
+            }
+            AtomicMarkableReference<Node> s = window.next.next;
+            if (window.next.next.compareAndSet(s.getReference(), s.getReference(), false, true)) {
+                window.cur.next.compareAndSet(window.next, s.getReference(), false, false);
+                return true;
+            }
         }
-        return res;
     }
 
     @Override
     public boolean contains(int x) {
-        Window w = findWindow(x);
-        boolean res = w.next.x == x;
-        return res;
+        Window window = findWindows(x);
+        return window.next.x == x;
     }
 }
