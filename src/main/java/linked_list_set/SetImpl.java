@@ -37,9 +37,9 @@ public class SetImpl implements Set {
                     window.cur = window.next;
                     window.next = window.cur.next.getReference();
                 }
-                if (!window.next.next.isMarked()) {
-                    return window;
-                }
+            }
+            if (!window.next.next.isMarked()) {
+                return window;
             }
         }
     }
